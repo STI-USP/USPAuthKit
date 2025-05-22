@@ -171,7 +171,7 @@
         return;
     }
 
-    NSURLRequest *req = [OAuth1Controller preparedRequestForPath:@"wsusuario/oauth/usuariousp"
+    NSURLRequest *req = [OAuth1Controller preparedRequestForPath:@"/wsusuario/oauth/usuariousp"
                                                       parameters:nil
                                                       HTTPmethod:@"POST"
                                                       oauthToken:self.oauthToken
