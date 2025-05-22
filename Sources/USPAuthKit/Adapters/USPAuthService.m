@@ -116,8 +116,6 @@
                 
                 [self registerTokenWithCompletion:^(NSError * _Nullable regErr) {
                     if (regErr) {
-                        // Depending on policy, you might still return the user data even if registration fails
-                        // For now, considering registration failure as a total failure for this step.
                         postDismissCompletion(nil, regErr);
                         return;
                     }
@@ -128,7 +126,7 @@
     };
     
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loginVC];
-    nav.modalPresentationStyle = UIModalPresentationFullScreen; // Or another appropriate style
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
     [fromVC presentViewController:nav animated:YES completion:nil];
 }
 
@@ -145,8 +143,6 @@
         return;
     }
 
-    // Assuming "wsusuario/oauth/usuariousp" does not require additional non-OAuth POST body parameters.
-    // If it did, they would be passed in the `parameters` argument here.
     NSURLRequest *req = [OAuth1Controller preparedRequestForPath:@"/wsusuario/oauth/usuariousp"
                                                       parameters:nil
                                                       HTTPmethod:@"POST"
@@ -188,8 +184,6 @@
         
         // Persiste em cache
         [self.defaults setObject:data forKey:@"userData"];
-        // No need to call synchronize explicitly for modern iOS unless specific timing is critical.
-        // [self.defaults synchronize];
         
         completion(user, nil);
     }] resume];
@@ -197,7 +191,7 @@
 
 - (void)registerTokenWithCompletion:(void(^)(NSError * _Nullable error))completion {
     NSParameterAssert(completion);
-    NSString *wsUserId = self.userData[@"wsuserid"]; // Or whatever the correct key is
+    NSString *wsUserId = self.userData[@"wsuserid"];
     
     if (!wsUserId || wsUserId.length == 0) {
         NSError *e = [NSError errorWithDomain:@"USPAuthService"
@@ -208,13 +202,12 @@
     }
     
     NSURL *url = [NSURL URLWithString: [kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
-    NSDictionary *body = @{ @"token": wsUserId, @"app": @"AppEcard" }; // Ensure "AppEcard" is the correct app identifier
+    NSDictionary *body = @{ @"token": wsUserId, @"app": @"AppEcard" };
     
-    // Assuming HTTPClient is configured and available
     [[HTTPClient sharedClient] postJSON:body
                                   toURL:url
                              completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {
-        if (err || (resp && resp.statusCode != 200)) { // Check resp for nil before accessing statusCode
+        if (err || (resp && resp.statusCode != 200)) {
             NSError *effectiveError = err;
             if (!effectiveError && resp) { // If no transport error, but bad status code
                 NSString *desc = [NSString stringWithFormat:@"Falha ao registrar token. Status: %ld", (long)resp.statusCode];
@@ -230,7 +223,6 @@
             return;
         }
         
-        // Marca registro no defaults (opcional, but good for tracking)
         [self.defaults setBool:YES forKey:@"isRegistered"];
          [self.defaults synchronize];
         
@@ -241,17 +233,15 @@
 #pragma mark – Propriedades set (OAuthToken and Secret)
 
 - (void)setOauthToken:(NSString *)oauthToken {
-    _oauthToken = [oauthToken copy]; // Use copy for strings
+    _oauthToken = [oauthToken copy];
     if (_oauthToken) {
         [self.defaults setObject:_oauthToken forKey:@"oauthToken"];
     } else {
         [self.defaults removeObjectForKey:@"oauthToken"];
     }
-    // [self.defaults synchronize]; // Generally not needed for each set on modern iOS
 }
 
 - (NSString *)oauthToken {
-    // Ensure it's loaded from defaults if accessed before explicit set (e.g. after init)
     if (!_oauthToken) {
         _oauthToken = [self.defaults stringForKey:@"oauthToken"];
     }
@@ -265,7 +255,6 @@
     } else {
         [self.defaults removeObjectForKey:@"oauthTokenSecret"];
     }
-    // [self.defaults synchronize];
 }
 
 - (NSString *)oauthTokenSecret {
@@ -275,13 +264,11 @@
     return _oauthTokenSecret;
 }
 
-// Method to clear session data (logout)
 - (void)logout {
     self.oauthToken = nil;
     self.oauthTokenSecret = nil;
     [self.defaults removeObjectForKey:@"userData"];
     [self.defaults removeObjectForKey:@"isRegistered"];
-    // [self.defaults synchronize];
     NSLog(@"User session cleared.");
 }
 
