@@ -148,17 +148,18 @@
   [fromVC presentViewController:nav animated:YES completion:nil];
 }
 
-
-#pragma mark – Helpers
+#pragma mark - Helpers
 
 - (void)fetchUserDataWithCompletion:(void(^)(NSDictionary<NSString*,id>* _Nullable user,
                                              NSError * _Nullable error))completion {
   NSParameterAssert(completion);
   if (!self.oauthToken || !self.oauthTokenSecret) {
     NSError *e = [NSError errorWithDomain:@"USPAuthService"
-                                     code:1 // Arbitrary code for missing tokens
+                                     code:1
                                  userInfo:@{NSLocalizedDescriptionKey:@"Tokens OAuth não disponíveis para buscar dados do usuário."}];
-    dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, e); });
+    dispatch_async(dispatch_get_main_queue(), ^{
+      completion(nil, e);
+    });
     return;
   }
   
@@ -169,91 +170,94 @@
                                                    oauthSecret:self.oauthTokenSecret];
   if (!req) {
     NSError *e = [NSError errorWithDomain:@"USPAuthService"
-                                     code:0 // Standard code for request creation failure
+                                     code:0
                                  userInfo:@{NSLocalizedDescriptionKey:@"Não foi possível criar requisição para buscar dados do usuário."}];
-    dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, e); });
+    dispatch_async(dispatch_get_main_queue(), ^{
+      completion(nil, e);
+    });
     return;
   }
   
   [[[NSURLSession sharedSession] dataTaskWithRequest:req
-                                   completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable resp, NSError * _Nullable err) {
-    if (err) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-          if (err) {
-              completion(nil, err);
-              return;
-          }
-          if (!data) {
-              NSError *e = [NSError errorWithDomain:NSStringFromClass([self class])
-                                               code:3
-                                           userInfo:@{NSLocalizedDescriptionKey:@"Nenhum dado recebido do servidor."}];
-              completion(nil, e);
-              return;
-          }
-          
-          NSError *jsonErr;
-          NSDictionary *user = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonErr];
-          
-          if (jsonErr || ![user isKindOfClass:NSDictionary.class] || user.count == 0) {
-              NSError *e = jsonErr ? jsonErr :
-              [NSError errorWithDomain:NSStringFromClass([self class])
-                                  code:4
-                              userInfo:@{NSLocalizedDescriptionKey:@"Resposta inválida do servidor ao buscar dados do usuário ou dados vazios."}];
-              completion(nil, e);
-              return;
-          }
-          
-          [self.defaults setObject:data forKey:@"userData"];
-          completion(user, nil);
-      });
-
+                                   completionHandler:^(NSData * _Nullable data,
+                                                       NSURLResponse * _Nullable resp,
+                                                       NSError * _Nullable err) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (err) {
+        completion(nil, err);
+        return;
+      }
+      if (!data) {
+        NSError *e = [NSError errorWithDomain:NSStringFromClass([self class])
+                                         code:3
+                                     userInfo:@{NSLocalizedDescriptionKey:@"Nenhum dado recebido do servidor."}];
+        completion(nil, e);
+        return;
+      }
+      
+      NSError *jsonErr;
+      NSDictionary *user = [NSJSONSerialization JSONObjectWithData:data
+                                                           options:0
+                                                             error:&jsonErr];
+      if (jsonErr || ![user isKindOfClass:NSDictionary.class] || user.count == 0) {
+        NSError *e = jsonErr ?: [NSError errorWithDomain:NSStringFromClass([self class])
+                                                    code:4
+                                                userInfo:@{NSLocalizedDescriptionKey:@"Resposta inválida do servidor ao buscar dados do usuário ou dados vazios."}];
+        completion(nil, e);
+        return;
+      }
+      
+      [self.defaults setObject:data forKey:@"userData"];
+      [self.defaults synchronize];
+      completion(user, nil);
+    });
   }] resume];
 }
-    
-    - (void)registerTokenWithCompletion:(void(^)(NSError * _Nullable error))completion {
-    NSParameterAssert(completion);
-    NSString *wsUserId = self.userData[@"wsuserid"];
-    
-    if (!wsUserId || wsUserId.length == 0) {
-      NSError *e = [NSError errorWithDomain:@"USPAuthService"
-                                       code:5 // Arbitrary code for missing wsuserid
-                                   userInfo:@{NSLocalizedDescriptionKey:@"ID do usuário (wsuserid) não encontrado para registrar o token."}];
-      dispatch_async(dispatch_get_main_queue(), ^{ completion(e); });
-      return;
-    }
-    
-    NSURL *url = [NSURL URLWithString: [kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
-    NSDictionary *body = @{ @"token": wsUserId, @"app": @"AppEcard" };
-    
-    [[HTTPClient sharedClient] postJSON:body
-                                  toURL:url
-                             completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {
-      // Garantir que o callback seja na main thread
-      dispatch_async(dispatch_get_main_queue(), ^{
-        if (err || (resp && resp.statusCode != 200)) {
-          NSError *effectiveError = err;
-          if (!effectiveError && resp) { // If no transport error, but bad status code
-            NSString *desc = [NSString stringWithFormat:@"Falha ao registrar token. Status: %ld", (long)resp.statusCode];
-            effectiveError = [NSError errorWithDomain:@"USPAuthService"
-                                                 code:resp.statusCode
-                                             userInfo:@{NSLocalizedDescriptionKey:desc}];
-          } else if (!effectiveError) { // Fallback if err and resp are nil (should not happen with valid HTTPClient)
-            effectiveError = [NSError errorWithDomain:@"USPAuthService"
-                                                 code:6 // Arbitrary code for unknown registration error
-                                             userInfo:@{NSLocalizedDescriptionKey:@"Falha desconhecida ao registrar token."}];
-          }
-          completion(effectiveError);
-          return;
-        }
-        
-        [self.defaults setBool:YES forKey:@"isRegistered"];
-        [self.defaults synchronize];
-        completion(nil);
-      }];
-    });
-  }
 
-#pragma mark – Propriedades set (OAuthToken and Secret)
+- (void)registerTokenWithCompletion:(void(^)(NSError * _Nullable error))completion {
+  NSParameterAssert(completion);
+  NSString *wsUserId = self.userData[@"wsuserid"];
+  
+  if (!wsUserId.length) {
+    NSError *e = [NSError errorWithDomain:@"USPAuthService"
+                                     code:5
+                                 userInfo:@{NSLocalizedDescriptionKey:@"ID do usuário (wsuserid) não encontrado para registrar o token."}];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      completion(e);
+    });
+    return;
+  }
+  
+  NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
+  NSDictionary *body = @{ @"token": wsUserId, @"app": @"AppEcard" };
+  
+  [[HTTPClient sharedClient] postJSON:body
+                                toURL:url
+                           completion:^(NSData * _Nullable data,
+                                        NSHTTPURLResponse * _Nullable resp,
+                                        NSError * _Nullable err) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      // erro de transporte ou status HTTP != 200
+      if (err || resp.statusCode != 200) {
+        NSError *effectiveError = err ?: [NSError errorWithDomain:@"USPAuthService"
+                                                             code:resp.statusCode
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                                                      [NSString stringWithFormat:@"Falha ao registrar token. Status: %ld",
+                                                                       (long)resp.statusCode]}];
+        completion(effectiveError);
+        return;
+      }
+      
+      // sucesso
+      [self.defaults setBool:YES forKey:@"isRegistered"];
+      [self.defaults synchronize];
+      completion(nil);
+    });
+  }];  
+}
+
+
+#pragma mark - Propriedades set (OAuthToken and Secret)
 
 - (void)setOauthToken:(NSString *)oauthToken {
   _oauthToken = [oauthToken copy];
