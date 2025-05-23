@@ -69,7 +69,7 @@
 - (BOOL)isLoggedIn {
   NSString *token  = [_defaults stringForKey:@"oauthToken"];
   NSString *secret = [_defaults stringForKey:@"oauthTokenSecret"];
-  NSData   *data   = [_defaults objectForKey:@"uspUserData"];
+  NSData   *data   = [_defaults objectForKey:@"userData"];
   return (token.length > 0
           && secret.length > 0
           && data != nil
@@ -77,7 +77,7 @@
 }
 
 - (USPAuthUser *)currentUser {
-  NSData *data = [self.defaults objectForKey:@"uspUserData"];
+  NSData *data = [self.defaults objectForKey:@"userData"];
   if (!data) return nil;
   NSError *err;
   NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
