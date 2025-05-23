@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <WebKit/WebKit.h>
+@class USPAuthUser;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -30,8 +31,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// • se já houver cache, devolve imediatamente
 /// • senão, apresenta o LoginWebViewController e, ao final, devolve o user
 - (void)ensureLoggedInFromViewController:(UIViewController*)fromVC
-                             completion:(void(^)(NSDictionary<NSString*,id>* _Nullable user,
-                                                 NSError * _Nullable error))completion;
+                              completion:(void(^)(USPAuthUser * _Nullable user,
+                                                  NSError * _Nullable error))completion;
+/// Garante que o usuário está logado (cache válido + tokens presentes)
+- (BOOL)isLoggedIn;
+
+/// Retorna o usuário atual (ou nil se não estiver logado)
+- (nullable USPAuthUser*)currentUser;
 
 /// Apresenta o fluxo de login num WKWebView. Chama completion com sucesso ou erro.
 - (void)loginInWebView:(WKWebView*)webView

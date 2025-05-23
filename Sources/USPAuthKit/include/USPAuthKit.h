@@ -13,8 +13,8 @@
 
 // Public interfaces
 #import "USPAuthService.h"
-#import "LoginWebViewController.h"
-#import "OAuth1Controller.h"
+#import "USPAuthUser.h"
+#import "USPAuthVinculo.h"
 
 //! Project version number for USPAuthKit.
 FOUNDATION_EXPORT double USPAuthKitVersionNumber;
