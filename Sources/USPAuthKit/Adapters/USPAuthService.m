@@ -19,6 +19,7 @@
 #import "OAuthConfig.h"
 #import "OAuth1Controller.h"
 #import "LoginWebViewController.h"
+#import "USPAuthUser.h"
 
 @interface USPAuthService ()
 
@@ -65,85 +66,96 @@
   return parsed;
 }
 
+- (BOOL)isLoggedIn {
+  NSString *token  = [_defaults stringForKey:@"oauthToken"];
+  NSString *secret = [_defaults stringForKey:@"oauthTokenSecret"];
+  NSData   *data   = [_defaults objectForKey:@"uspUserData"];
+  return (token.length > 0
+          && secret.length > 0
+          && data != nil
+          && data.length > 0);
+}
+
+- (USPAuthUser *)currentUser {
+  NSData *data = [self.defaults objectForKey:@"uspUserData"];
+  if (!data) return nil;
+  NSError *err;
+  NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
+  if (err || ![dict isKindOfClass:[NSDictionary class]]) return nil;
+  return [[USPAuthUser alloc] initWithDictionary:dict];
+}
+
 - (void)ensureLoggedInFromViewController:(UIViewController*)fromVC
-                              completion:(void(^)(NSDictionary<NSString*,id>* _Nullable user,
-                                                  NSError * _Nullable error))completion
-{
+                              completion:(void(^)(USPAuthUser * _Nullable user,
+                                                  NSError * _Nullable error))completion {
   NSParameterAssert(fromVC);
-  NSParameterAssert(completion); // Completion é obrigatório
+  NSParameterAssert(completion);
   
-  // Se já existe um processo de login em andamento, retorna um erro.
   if (self.isLoginPresentationInProgress) {
-    NSLog(@"USPAuthService: Tentativa de iniciar novo login enquanto um já está em progresso.");
     NSError *inProgressError = [NSError errorWithDomain:NSStringFromClass([self class])
-                                                   code:1001 // Código de erro para "em progresso"
-                                               userInfo:@{NSLocalizedDescriptionKey:@"Processo de login já em andamento."}];
-    if (completion) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-        completion(nil, inProgressError);
-      });
-    }
-    return;
-  }
-  
-  // 1) Cache?
-  if (self.oauthToken.length > 0 && self.userData.count > 0) {
+                                                   code:1001
+                                               userInfo:@{NSLocalizedDescriptionKey:@"Login já em andamento."}];
     dispatch_async(dispatch_get_main_queue(), ^{
-      if (completion) completion(self.userData, nil);
+      completion(nil, inProgressError);
     });
     return;
   }
   
-  self.isLoginPresentationInProgress = YES; // Define a flag ANTES de apresentar
+  // Cache?
+  if (self.oauthToken.length > 0 && self.userData.count > 0) {
+    USPAuthUser *cached = [[USPAuthUser alloc] initWithDictionary:self.userData];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      completion(cached, nil);
+    });
+    return;
+  }
   
-  // 2) Apresenta login
+  self.isLoginPresentationInProgress = YES;
+  
   LoginWebViewController *loginVC = [[LoginWebViewController alloc] init];
-  
-  // Este wrapper garante que a flag seja resetada e a completion final seja na main thread.
-  void (^postDismissCompletion)(NSDictionary<NSString*,id>*, NSError*) = ^(NSDictionary<NSString*,id>* userResult, NSError *errorResult) {
-    self.isLoginPresentationInProgress = NO; // Reseta a flag em todos os caminhos de conclusão
-    if (completion) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-        completion(userResult, errorResult);
-      });
-    }
+  void (^postDismiss)(USPAuthUser*, NSError*) = ^(USPAuthUser *userModel, NSError *err) {
+    self.isLoginPresentationInProgress = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      completion(userModel, err);
+    });
   };
   
   loginVC.loginCompletion = ^(BOOL success, NSError * _Nullable loginError) {
-    // A flag isLoginPresentationInProgress só é resetada DENTRO do postDismissCompletion,
-    // que é chamado APÓS o dismissViewControllerAnimated:completion: terminar.
     [fromVC dismissViewControllerAnimated:YES completion:^{
       if (!success) {
-        postDismissCompletion(nil, loginError);
+        postDismiss(nil, loginError);
         return;
       }
       
-      // 3) Tokens devem ter sido salvos. Agora fetch user data + register token
-      [self fetchUserDataWithCompletion:^(NSDictionary * _Nullable user, NSError * _Nullable fetchErr) {
+      [self fetchUserDataWithCompletion:^(NSDictionary * _Nullable dict, NSError * _Nullable fetchErr) {
         if (fetchErr) {
-          postDismissCompletion(nil, fetchErr);
+          postDismiss(nil, fetchErr);
           return;
         }
-        if (!user || user.count == 0) { // Verifica se user é nil ou vazio
+        if (!dict || dict.count == 0) {
           NSError *e = [NSError errorWithDomain:NSStringFromClass([self class])
                                            code:2
-                                       userInfo:@{NSLocalizedDescriptionKey:@"Dados do usuário não encontrados após o fetch ou resposta vazia."}];
-          postDismissCompletion(nil, e);
+                                       userInfo:@{NSLocalizedDescriptionKey:
+                                                    @"Dados do usuário não encontrados."}];
+          postDismiss(nil, e);
           return;
         }
         
         [self registerTokenWithCompletion:^(NSError * _Nullable regErr) {
           if (regErr) {
-            postDismissCompletion(nil, regErr);
+            postDismiss(nil, regErr);
             return;
           }
-          postDismissCompletion(user, nil);
+          // converte dicionário em modelo fortemente-typed
+          USPAuthUser *userModel = [[USPAuthUser alloc] initWithDictionary:dict];
+          postDismiss(userModel, nil);
         }];
       }];
     }];
   };
   
-  UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loginVC];
+  UINavigationController *nav = [[UINavigationController alloc]
+                                 initWithRootViewController:loginVC];
   nav.modalPresentationStyle = UIModalPresentationFullScreen;
   [fromVC presentViewController:nav animated:YES completion:nil];
 }
@@ -253,7 +265,7 @@
       [self.defaults synchronize];
       completion(nil);
     });
-  }];  
+  }];
 }
 
 
