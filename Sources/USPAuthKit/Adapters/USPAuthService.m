@@ -275,10 +275,10 @@
   _oauthToken = [oauthToken copy];
   if (_oauthToken) {
     [self.defaults setObject:_oauthToken forKey:@"oauthToken"];
-    [self.defaults synchronize];
   } else {
     [self.defaults removeObjectForKey:@"oauthToken"];
   }
+  [self.defaults synchronize];
 }
 
 - (NSString *)oauthToken {
@@ -292,10 +292,10 @@
   _oauthTokenSecret = [oauthTokenSecret copy];
   if (_oauthTokenSecret) {
     [self.defaults setObject:_oauthTokenSecret forKey:@"oauthTokenSecret"];
-    [self.defaults synchronize];
   } else {
     [self.defaults removeObjectForKey:@"oauthTokenSecret"];
   }
+  [self.defaults synchronize];
 }
 
 - (NSString *)oauthTokenSecret {
@@ -310,6 +310,7 @@
   self.oauthTokenSecret = nil;
   [self.defaults removeObjectForKey:@"userData"];
   [self.defaults removeObjectForKey:@"isRegistered"];
+  [self.defaults synchronize];
   NSLog(@"User session cleared.");
 }
 
