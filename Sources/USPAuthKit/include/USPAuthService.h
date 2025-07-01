@@ -21,6 +21,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString  *oauthToken;
 @property (nonatomic, copy, nullable) NSString  *oauthTokenSecret;
 
+/// Chave da sua aplicação a ser enviada no registro de token.
+@property (nonatomic, copy) NSString *appKey;
+
 /// Dados do usuário retornados pela API (JSON desserializado)
 @property (nonatomic, readonly) NSDictionary<NSString*, id> *userData;
 
