@@ -46,10 +46,12 @@
 - (instancetype)init {
   if (self = [super init]) {
     _defaults = [NSUserDefaults standardUserDefaults];
-    _isLoginPresentationInProgress = NO;
-    
+
     _oauthToken = [_defaults stringForKey:@"oauthToken"];
     _oauthTokenSecret = [_defaults stringForKey:@"oauthTokenSecret"];
+    
+    _appKey = @"";
+    _isLoginPresentationInProgress = NO;
   }
   return self;
 }
@@ -241,7 +243,8 @@
   }
   
   NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
-  NSDictionary *body = @{ @"token": wsUserId, @"app": @"AppEcard" };
+  NSDictionary *body = @{ @"token": wsUserId,
+                          @"app": _appKey };
   
   [[HTTPClient sharedClient] postJSON:body
                                 toURL:url
