@@ -7,7 +7,7 @@
 //
 
 #if __has_include(<UIKit/UIKit.h>)
-  @import UIKit;       // para UIActivityIndicatorView
+  @import UIKit; // para UIActivityIndicatorView
 #endif
 @import WebKit;
 #import "OAuth1Controller.h"
@@ -20,8 +20,8 @@
 // ----------------------------------------------------------------------------
 
 static NSString * CHPercentEscapedQueryStringPairMemberFromStringWithEncoding(NSString *string, NSStringEncoding encoding) {
-  static NSString * const kCHCharactersToBeEscaped       = @":/?&=;+!@#$()~";
-  static NSString * const kCHCharactersToLeaveUnescaped  = @"[].";
+  static NSString * const kCHCharactersToBeEscaped = @":/?&=;+!@#$()~";
+  static NSString * const kCHCharactersToLeaveUnescaped = @"[].";
   return (__bridge_transfer NSString *)CFURLCreateStringByAddingPercentEscapes(
     kCFAllocatorDefault,
     (__bridge CFStringRef)string,
