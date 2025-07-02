@@ -1,7 +1,7 @@
-// LoginWebViewController.m
-// NuAuthKit
+//  LoginWebViewController.m
+//  NuAuthKit
 //
-// Created by Vagner Machado on 22/05/25.
+//  Created by Vagner Machado on 22/05/25.
 //
 
 #if __has_include(<UIKit/UIKit.h>)
@@ -12,15 +12,15 @@
 #import <WebKit/WebKit.h>
 
 @interface LoginWebViewController ()
-// No need for WKNavigationDelegate conformance here if OAuth1Controller handles it fully.
-// However, OAuth1Controller currently sets itself as the delegate.
+@property (nonatomic, strong) WKWebView *webView;
+@property (nonatomic, strong) UIProgressView *progressView;
 @end
 
 @implementation LoginWebViewController {
-  WKWebView        *_webView;
   OAuth1Controller *_oauthController;
 }
 
+#pragma mark - Init
 - (instancetype)init {
   if ((self = [super init])) {
     _oauthController = [[OAuth1Controller alloc] init];
@@ -28,44 +28,57 @@
   return self;
 }
 
+- (void)dealloc {
+  @try { [self.webView removeObserver:self forKeyPath:@"estimatedProgress"]; }
+  @catch (__unused NSException *e) {}
+}
+
+#pragma mark - View Lifecycle
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    self.navigationController.navigationBar.tintColor = UIColor.systemBlueColor;
+}
+
 - (void)loadView {
-  UIView *v = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
-  v.backgroundColor = [UIColor systemBackgroundColor];
-  self.view = v;
-  
-  UINavigationBar *bar = [[UINavigationBar alloc] init];
-  bar.translatesAutoresizingMaskIntoConstraints = NO;
-  
-  UINavigationItem *navItem = [[UINavigationItem alloc] initWithTitle:@"Login"];
-  navItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-                                initWithTitle:@"Cancelar"
-                                style:UIBarButtonItemStylePlain
-                                target:self
-                                action:@selector(cancel)];
-  [bar setItems:@[navItem]];
-  [v addSubview:bar];
-  
+  UIView *root = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+  root.backgroundColor = UIColor.systemBackgroundColor;
+  self.view = root;
+
+  // Barra de progresso fina logo abaixo do nav-bar
+  self.progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleBar];
+  self.progressView.translatesAutoresizingMaskIntoConstraints = NO;
+  self.progressView.tintColor = [UIColor colorNamed:@"BrandAccent"] ?: UIColor.systemBlueColor;
+  [root addSubview:self.progressView];
+
+  // WebView
   WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
-  _webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:cfg];
-  _webView.translatesAutoresizingMaskIntoConstraints = NO;
-  [v addSubview:_webView];
-  
+  self.webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:cfg];
+  self.webView.translatesAutoresizingMaskIntoConstraints = NO;
+  [root addSubview:self.webView];
+
   [NSLayoutConstraint activateConstraints:@[
-    [bar.topAnchor constraintEqualToAnchor:v.safeAreaLayoutGuide.topAnchor],
-    [bar.leadingAnchor constraintEqualToAnchor:v.leadingAnchor],
-    [bar.trailingAnchor constraintEqualToAnchor:v.trailingAnchor],
-    
-    [_webView.topAnchor constraintEqualToAnchor:bar.bottomAnchor],
-    [_webView.leadingAnchor constraintEqualToAnchor:v.leadingAnchor],
-    [_webView.trailingAnchor constraintEqualToAnchor:v.trailingAnchor],
-    [_webView.bottomAnchor constraintEqualToAnchor:v.bottomAnchor]
+    [self.progressView.topAnchor constraintEqualToAnchor:root.safeAreaLayoutGuide.topAnchor],
+    [self.progressView.leadingAnchor constraintEqualToAnchor:root.leadingAnchor],
+    [self.progressView.trailingAnchor constraintEqualToAnchor:root.trailingAnchor],
+
+    [self.webView.topAnchor constraintEqualToAnchor:self.progressView.bottomAnchor],
+    [self.webView.leadingAnchor constraintEqualToAnchor:root.leadingAnchor],
+    [self.webView.trailingAnchor constraintEqualToAnchor:root.trailingAnchor],
+    [self.webView.bottomAnchor constraintEqualToAnchor:root.bottomAnchor],
   ]];
 }
 
 - (void)viewDidLoad {
   [super viewDidLoad];
-  // View is loaded, safe to start operations that might involve the view hierarchy
-  // if they weren't tied to appearance.
+
+  // Título + botão Cancelar
+  self.title = @"Entrar";
+  UIBarButtonItem *cancelBtn = [[UIBarButtonItem alloc] initWithTitle:@"Cancelar" style:UIBarButtonItemStylePlain target:self action:@selector(cancel)];
+  self.navigationItem.rightBarButtonItem = cancelBtn;
+
+  // Observa progresso
+  [self.webView addObserver:self forKeyPath:@"estimatedProgress" options:NSKeyValueObservingOptionNew context:nil];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -73,51 +86,53 @@
   [self startLoginFlow];
 }
 
+#pragma mark - Cancel & Progress
 - (void)cancel {
   if (self.loginCompletion) {
-    NSError *cancelErr = [NSError errorWithDomain:@"LoginWebViewController"
-                                             code:NSUserCancelledError
-                                         userInfo:@{NSLocalizedDescriptionKey:@"Login cancelado pelo usuário."}];
-    // Call completion on the main thread
+    NSError *e = [NSError errorWithDomain:@"LoginWebViewController" code:NSUserCancelledError userInfo:@{NSLocalizedDescriptionKey:@"Login cancelado pelo usuário."}];
+    
     dispatch_async(dispatch_get_main_queue(), ^{
-      self.loginCompletion(NO, cancelErr);
+      self.loginCompletion(NO, e);
     });
   }
 }
 
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)contex {
+  if ([keyPath isEqualToString:@"estimatedProgress"]) {
+    self.progressView.progress = self.webView.estimatedProgress;
+    self.progressView.hidden = self.progressView.progress >= 1.0;
+  }
+}
+
+#pragma mark - OAuth
 - (void)startLoginFlow {
-  if (!_webView) {
-    NSLog(@"Error: WebView is not initialized in LoginWebViewController.");
+  if (!self.webView) {
     if (self.loginCompletion) {
-      NSError *setupError = [NSError errorWithDomain:@"LoginWebViewController"
-                                                code:-2 // Arbitrary internal error code
-                                            userInfo:@{NSLocalizedDescriptionKey:@"Falha na configuração interna da tela de login."}];
+      NSError *setupErr = [NSError errorWithDomain:@"LoginWebViewController" code:-2 userInfo:@{NSLocalizedDescriptionKey : @"Falha na configuração interna da tela de login."}];
+
       dispatch_async(dispatch_get_main_queue(), ^{
-        self.loginCompletion(NO, setupError);
+        self.loginCompletion(NO, setupErr);
       });
+
     }
     return;
   }
-  
-  [_oauthController loginWithWebView:_webView
-                          completion:^(NSDictionary<NSString*,NSString*> * _Nullable tokens, NSError * _Nullable error) {
+
+  __weak typeof(self) weakSelf = self;
+  [_oauthController loginWithWebView:self.webView completion:^(NSDictionary<NSString *,NSString *> * _Nullable tokens, NSError * _Nullable error) {
+    __strong typeof(weakSelf) self = weakSelf;
     if (error) {
-      if (self.loginCompletion) {
-        self.loginCompletion(NO, error);
-      }
-    } else {
-      // Update USPAuthService with the new tokens
-      USPAuthService *authService = [USPAuthService sharedService];
-      authService.oauthToken = tokens[@"oauth_token"];
-      authService.oauthTokenSecret = tokens[@"oauth_token_secret"];
-      
-      if (self.loginCompletion) {
-        self.loginCompletion(YES, nil);
-      }
+      if (self.loginCompletion) self.loginCompletion(NO, error);
+      return;
     }
+
+    USPAuthService *svc = [USPAuthService sharedService];
+    svc.oauthToken = tokens[@"oauth_token"];
+    svc.oauthTokenSecret = tokens[@"oauth_token_secret"];
+
+    if (self.loginCompletion) self.loginCompletion(YES, nil);
   }];
 }
 
 @end
-
 #endif

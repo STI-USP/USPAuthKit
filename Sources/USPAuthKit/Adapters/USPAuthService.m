@@ -87,81 +87,88 @@
   return [[USPAuthUser alloc] initWithDictionary:dict];
 }
 
-- (void)ensureLoggedInFromViewController:(UIViewController*)fromVC
-                              completion:(void(^)(USPAuthUser * _Nullable user,
-                                                  NSError * _Nullable error))completion {
+- (void)ensureLoggedInFromViewController:(UIViewController *)fromVC
+                              completion:(void (^)(USPAuthUser * _Nullable user,
+                                                   NSError * _Nullable error))completion {
   NSParameterAssert(fromVC);
   NSParameterAssert(completion);
-  
+
+  // 1. Evita login duplo
   if (self.isLoginPresentationInProgress) {
-    NSError *inProgressError = [NSError errorWithDomain:NSStringFromClass([self class])
-                                                   code:1001
-                                               userInfo:@{NSLocalizedDescriptionKey:@"Login já em andamento."}];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      completion(nil, inProgressError);
-    });
+    NSError *inProgressErr = [NSError errorWithDomain:NSStringFromClass(self.class)
+                                                 code:1001
+                                             userInfo:@{NSLocalizedDescriptionKey:@"Login já em andamento."}];
+    dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, inProgressErr); });
     return;
   }
-  
-  // Cache?
+
+  // 2. Cache rápido
   if (self.oauthToken.length > 0 && self.userData.count > 0) {
     USPAuthUser *cached = [[USPAuthUser alloc] initWithDictionary:self.userData];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      completion(cached, nil);
-    });
+    dispatch_async(dispatch_get_main_queue(), ^{ completion(cached, nil); });
     return;
   }
-  
+
   self.isLoginPresentationInProgress = YES;
-  
+
+  // 3. VC de login + barra “bonita”
   LoginWebViewController *loginVC = [[LoginWebViewController alloc] init];
-  void (^postDismiss)(USPAuthUser*, NSError*) = ^(USPAuthUser *userModel, NSError *err) {
-    self.isLoginPresentationInProgress = NO;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      completion(userModel, err);
-    });
-  };
-  
-  loginVC.loginCompletion = ^(BOOL success, NSError * _Nullable loginError) {
+  loginVC.loginCompletion = ^(BOOL success, NSError * _Nullable loginErr) {
+    __auto_type weakSelf = self;
     [fromVC dismissViewControllerAnimated:YES completion:^{
-      if (!success) {
-        postDismiss(nil, loginError);
-        return;
-      }
-      
-      [self fetchUserDataWithCompletion:^(NSDictionary * _Nullable dict, NSError * _Nullable fetchErr) {
-        if (fetchErr) {
-          postDismiss(nil, fetchErr);
+      __strong typeof(weakSelf) self = weakSelf;
+      self.isLoginPresentationInProgress = NO;
+
+      if (!success) { completion(nil, loginErr); return; }
+
+      // Busca dados e registra token
+      [self fetchUserDataWithCompletion:^(NSDictionary *dict, NSError *fetchErr) {
+        if (fetchErr || dict.count == 0) {
+          NSError *err = fetchErr ?: [NSError errorWithDomain:NSStringFromClass(self.class)
+                                                         code:2
+                                                     userInfo:@{NSLocalizedDescriptionKey:@"Dados do usuário não encontrados."}];
+          completion(nil, err);
           return;
         }
-        if (!dict || dict.count == 0) {
-          NSError *e = [NSError errorWithDomain:NSStringFromClass([self class])
-                                           code:2
-                                       userInfo:@{NSLocalizedDescriptionKey:
-                                                    @"Dados do usuário não encontrados."}];
-          postDismiss(nil, e);
-          return;
-        }
-        
-        [self registerTokenWithCompletion:^(NSError * _Nullable regErr) {
-          if (regErr) {
-            postDismiss(nil, regErr);
-            return;
-          }
-          // converte dicionário em modelo fortemente-typed
-          USPAuthUser *userModel = [[USPAuthUser alloc] initWithDictionary:dict];
-          postDismiss(userModel, nil);
+
+        [self registerTokenWithCompletion:^(NSError *regErr) {
+          completion(regErr ? nil : [[USPAuthUser alloc] initWithDictionary:dict], regErr);
         }];
       }];
     }];
   };
-  
-  UINavigationController *nav = [[UINavigationController alloc]
-                                 initWithRootViewController:loginVC];
-  nav.modalPresentationStyle = UIModalPresentationFullScreen;
-  [fromVC presentViewController:nav animated:YES completion:nil];
-}
 
+  // 4. NavigationController estilizado
+  UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loginVC];
+
+  if (@available(iOS 13.0, *)) {
+    UINavigationBarAppearance *ap = [UINavigationBarAppearance new];
+    [ap configureWithOpaqueBackground];
+    ap.backgroundColor = [UIColor colorNamed:@"BrandPrimary"];   // cor do seu catálogo
+    ap.titleTextAttributes = @{ NSForegroundColorAttributeName : UIColor.whiteColor };
+
+    nav.navigationBar.standardAppearance = ap;
+    nav.navigationBar.scrollEdgeAppearance = ap;
+    nav.navigationBar.compactAppearance  = ap;
+    nav.navigationBar.tintColor = UIColor.whiteColor;            // cor do botão “X”
+  }
+
+  // 5. Sheet no iPad, fullscreen no iPhone
+  if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    if (@available(iOS 15.0, *)) {
+      nav.sheetPresentationController.detents = @[UISheetPresentationControllerDetent.largeDetent];
+      nav.sheetPresentationController.prefersGrabberVisible = YES;
+    }
+  } else {
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
+  }
+
+  // 6. Apresentação
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [fromVC presentViewController:nav animated:YES completion:nil];
+  });
+}
 #pragma mark - Helpers
 
 - (void)fetchUserDataWithCompletion:(void(^)(NSDictionary<NSString*,id>* _Nullable user,

@@ -126,13 +126,13 @@ static inline NSDictionary * CHParametersFromQueryString(NSString *qs) {
 #define REQUEST_TOKEN_METHOD @"POST"
 #define ACCESS_TOKEN_METHOD  @"POST"
 #define CONSUMER_KEY         @"cetilq"
-#if DEV
+//#if DEV
 static NSString *const CONSUMER_SECRET = @"qhKtMXQTtmKA3cAdW5AHoNgce3XbBoPrrl6O5dbU";
 static NSString *const AUTH_URL        = @"https://dev.uspdigital.usp.br";
-#else
-static NSString *const CONSUMER_SECRET = @"pOQYX8kg5hTxQiGjSHBcYwcfSgtUmWapVkPm1TCR";
-static NSString *const AUTH_URL        = @"https://uspdigital.usp.br";
-#endif
+//#else
+//static NSString *const CONSUMER_SECRET = @"pOQYX8kg5hTxQiGjSHBcYwcfSgtUmWapVkPm1TCR";
+//static NSString *const AUTH_URL        = @"https://uspdigital.usp.br";
+//#endif
 
 // ----------------------------------------------------------------------------
 // 3) Private extension
