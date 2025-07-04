@@ -41,8 +41,9 @@
   
   NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
   req.HTTPMethod = @"POST";
-  [req setValue:@"application/json; charset=UTF-8"
-forHTTPHeaderField:@"Content-Type"];
+  [req setValue:@"application/json; charset=UTF-8" forHTTPHeaderField:@"Content-Type"];
+  [req setValue:@"820ecd52-849f-4815-8eb3-bbf9f4440ac5" forHTTPHeaderField:@"DEV-USP-MOBILE"];
+
   req.HTTPBody = jsonData;
   
   NSURLSessionDataTask *task = [self.session dataTaskWithRequest:req
