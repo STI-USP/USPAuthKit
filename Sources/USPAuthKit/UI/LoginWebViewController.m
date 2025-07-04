@@ -122,7 +122,8 @@
   [_oauthController loginWithWebView:self.webView completion:^(NSDictionary<NSString *,NSString *> * _Nullable tokens, NSError * _Nullable error) {
     __strong typeof(weakSelf) self = weakSelf;
     if (error) {
-      if (self.loginCompletion) self.loginCompletion(NO, error);
+      if (self.loginCompletion)
+        self.loginCompletion(NO, error);
       return;
     }
 
@@ -130,7 +131,8 @@
     svc.oauthToken = tokens[@"oauth_token"];
     svc.oauthTokenSecret = tokens[@"oauth_token_secret"];
 
-    if (self.loginCompletion) self.loginCompletion(YES, nil);
+    if (self.loginCompletion)
+      self.loginCompletion(YES, nil);
   }];
 }
 

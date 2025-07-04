@@ -237,40 +237,44 @@
 
 - (void)registerTokenWithCompletion:(void(^)(NSError * _Nullable error))completion {
   NSParameterAssert(completion);
-  NSString *wsUserId = self.userData[@"wsuserid"];
   
+  NSString *wsUserId = self.userData[@"wsuserid"];
+  NSLog(@"[USPAuth] Iniciando registro de token. wsUserId: %@", wsUserId);
+
   if (!wsUserId.length) {
     NSError *e = [NSError errorWithDomain:@"USPAuthService"
                                      code:5
                                  userInfo:@{NSLocalizedDescriptionKey:@"ID do usuário (wsuserid) não encontrado para registrar o token."}];
+    NSLog(@"[USPAuth] ERRO: wsUserId não encontrado. Abortando registro.");
     dispatch_async(dispatch_get_main_queue(), ^{
       completion(e);
     });
     return;
   }
-  
+
   NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
-  NSDictionary *body = @{ @"token": wsUserId,
-                          @"app": _appKey };
-  
-  [[HTTPClient sharedClient] postJSON:body
-                                toURL:url
-                           completion:^(NSData * _Nullable data,
-                                        NSHTTPURLResponse * _Nullable resp,
-                                        NSError * _Nullable err) {
+  NSDictionary *body = @{ @"token": wsUserId, @"app": _appKey };
+  NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
+
+  [[HTTPClient sharedClient] postJSON:body toURL:url completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {
     dispatch_async(dispatch_get_main_queue(), ^{
-      // erro de transporte ou status HTTP != 200
+      if (data) {
+        NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        NSLog(@"[USPAuth] Resposta do servidor: %@", responseString ?: @"(resposta vazia ou inválida)");
+      }
+
       if (err || resp.statusCode != 200) {
+        NSString *msg = err ? err.localizedDescription : [NSString stringWithFormat:@"Status: %ld", (long)resp.statusCode];
+        NSLog(@"[USPAuth] ERRO ao registrar token: %@", msg);
+
         NSError *effectiveError = err ?: [NSError errorWithDomain:@"USPAuthService"
                                                              code:resp.statusCode
-                                                         userInfo:@{NSLocalizedDescriptionKey:
-                                                                      [NSString stringWithFormat:@"Falha ao registrar token. Status: %ld",
-                                                                       (long)resp.statusCode]}];
+                                                         userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Falha ao registrar token. Status: %ld", (long)resp.statusCode]}];
         completion(effectiveError);
         return;
       }
-      
-      // sucesso
+
+      NSLog(@"[USPAuth] Token registrado com sucesso.");
       [self.defaults setBool:YES forKey:@"isRegistered"];
       [self.defaults synchronize];
       completion(nil);
