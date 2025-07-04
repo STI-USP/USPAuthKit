@@ -10,10 +10,10 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// URL base única para OAuth
-#if DEV
+//#if DEV
 static NSString * const kOAuthServiceBaseURL = @"https://dev.uspdigital.usp.br/mobile/servicos/oauth";
-#else
-static NSString * const kOAuthServiceBaseURL = @"https://uspdigital.usp.br/mobile/servicos/oauth";
-#endif
+//#else
+//static NSString * const kOAuthServiceBaseURL = @"https://uspdigital.usp.br/mobile/servicos/oauth";
+//#endif
 
 NS_ASSUME_NONNULL_END
